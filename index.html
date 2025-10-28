@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualizador de Inventario SOSA</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+        }
+
+        .upload-box {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+        }
+
+        .upload-box:hover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+
+        .upload-box.active {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .upload-box input[type="file"] {
+            display: none;
+        }
+
+        .upload-icon {
+            font-size: 50px;
+            margin-bottom: 15px;
+        }
+
+        .upload-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .file-name {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: white;
+            border-radius: 25px;
+            display: inline-block;
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .process-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 30px;
+        }
+
+        .process-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .process-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress-section {
+            display: none;
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9ff;
+            border-radius: 12px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 30px;
+            padding: 30px;
+            background: #f8f9ff;
+            border-radius: 12px;
+        }
+
+        .result-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .result-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .result-subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .download-btn {
+            width: 100%;
+            padding: 18px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .download-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(76, 175, 80, 0.4);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .success {
+            border-left-color: #4caf50 !important;
+        }
+
+        .warning {
+            border-left-color: #ff9800 !important;
+        }
+
+        .error {
+            border-left-color: #f44336 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏪 Actualizador de Inventario SOSA</h1>
+            <p>Actualiza tu inventario automáticamente desde el PDF de ventas</p>
+        </div>
+
+        <div class="content">
+            <!-- Sección de carga de archivos -->
+            <div class="upload-section">
+                <div class="upload-box" id="excelBox" onclick="document.getElementById('excelFile').click()">
+                    <div class="upload-icon">📊</div>
+                    <div class="upload-label">Inventario Excel</div>
+                    <div class="upload-hint">Click para seleccionar archivo .xlsx</div>
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="handleExcelUpload(event)">
+                    <div class="file-name" id="excelFileName" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="upload-section">
+                <div class="upload-box" id="pdfBox" onclick="document.getElementById('pdfFile').click()">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-label">PDF de Salidas</div>
+                    <div class="upload-hint">Click para seleccionar archivo .pdf</div>
+                    <input type="file" id="pdfFile" accept=".pdf" onchange="handlePdfUpload(event)">
+                    <div class="file-name" id="pdfFileName" style="display: none;"></div>
+                </div>
+            </div>
+
+            <button class="process-btn" id="processBtn" onclick="processInventory()" disabled>
+                ⚡ Actualizar Inventario
+            </button>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- Sección de progreso -->
+            <div class="progress-section" id="progressSection">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Procesando...</div>
+            </div>
+
+            <!-- Sección de resultados -->
+            <div class="results-section" id="resultsSection">
+                <div class="result-box success">
+                    <div class="result-title">✅ Proceso Completado</div>
+                    <div class="result-value" id="successCount">0</div>
+                    <div class="result-subtitle">Productos actualizados exitosamente</div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="unitsProcessed">0</div>
+                        <div class="stat-label">Unidades Restadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="percentProcessed">0%</div>
+                        <div class="stat-label">Éxito</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="notFoundCount">0</div>
+                        <div class="stat-label">No Encontrados</div>
+                    </div>
+                </div>
+
+                <button class="download-btn" onclick="downloadExcel()">
+                    📥 Descargar Inventario Actualizado
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let excelData = null;
+        let pdfData = null;
+        let processedData = null;
+
+        // Configurar PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('excelFileName').textContent = file.name;
+            document.getElementById('excelFileName').style.display = 'inline-block';
+            document.getElementById('excelBox').classList.add('active');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                // Leer la primera hoja
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                excelData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+                
+                checkReadyToProcess();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function handlePdfUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('pdfFileName').textContent = file.name;
+            document.getElementById('pdfFileName').style.display = 'inline-block';
+            document.getElementById('pdfBox').classList.add('active');
+
+            showProgress('Extrayendo datos del PDF...', 10);
+
+            const arrayBuffer = await file.arrayBuffer();
+            pdfData = await extractPdfData(arrayBuffer);
+            
+            hideProgress();
+            checkReadyToProcess();
+        }
+
+        async function extractPdfData(arrayBuffer) {
+            const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+            const productosVendidos = {};
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(' ');
+                
+                // Extraer productos (formato: CANTIDAD DESCRIPCION PRECIO)
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const match = line.match(/^(\d{1,4})\s+(.+?)\s+([\d,]+\.?\d*)$/);
+                    if (match) {
+                        const cantidad = parseInt(match[1]);
+                        const descripcion = match[2].trim();
+                        
+                        // Filtrar líneas inválidas
+                        if (!descripcion.includes('Factura') && 
+                            !descripcion.includes('AMCONTADO') && 
+                            !descripcion.includes('DIARIO')) {
+                            productosVendidos[descripcion] = (productosVendidos[descripcion] || 0) + cantidad;
+                        }
+                    }
+                }
+            }
+
+            return productosVendidos;
+        }
+
+        function checkReadyToProcess() {
+            const btn = document.getElementById('processBtn');
+            if (excelData && pdfData) {
+                btn.disabled = false;
+            }
+        }
+
+        function normalizeText(text) {
+            if (!text) return '';
+            return String(text)
+                .toUpperCase()
+                .replace(/[ÁÀÄÂ]/g, 'A')
+                .replace(/[ÉÈËÊ]/g, 'E')
+                .replace(/[ÍÌÏÎ]/g, 'I')
+                .replace(/[ÓÒÖÔ]/g, 'O')
+                .replace(/[ÚÙÜÛ]/g, 'U')
+                .replace(/Ñ/g, 'N')
+                .replace(/[.,\-/()''"]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function findProductInInventory(productoPdf, inventario) {
+            const descPdf = normalizeText(productoPdf);
+            const palabrasPdf = descPdf.split(' ').filter(p => p.length > 2);
+
+            // Buscar en el inventario (empezar desde fila 2, fila 1 es header)
+            for (let i = 2; i < inventario.length; i++) {
+                const row = inventario[i];
+                const descInv = normalizeText(row[1]); // Columna Descripción
+
+                // Coincidencia exacta
+                if (descPdf === descInv) {
+                    return { index: i, score: 100, method: 'exacta' };
+                }
+
+                // Contención
+                if (descPdf.includes(descInv) || descInv.includes(descPdf)) {
+                    return { index: i, score: 90, method: 'contenida' };
+                }
+
+                // Palabras clave
+                const palabrasInv = descInv.split(' ').filter(p => p.length > 2);
+                const comunes = palabrasPdf.filter(p => palabrasInv.includes(p));
+                const porcentaje = (comunes.length / palabrasPdf.length) * 100;
+
+                if (porcentaje >= 50) {
+                    return { index: i, score: porcentaje, method: 'palabras' };
+                }
+            }
+
+            return null;
+        }
+
+        async function processInventory() {
+            showProgress('Iniciando actualización...', 0);
+
+            const inventario = JSON.parse(JSON.stringify(excelData)); // Copiar
+            const actualizados = [];
+            const noEncontrados = [];
+            const sinExistencia = [];
+
+            const totalProductos = Object.keys(pdfData).length;
+            let procesados = 0;
+
+            for (const [productoPdf, cantidadVendida] of Object.entries(pdfData)) {
+                procesados++;
+                const progreso = (procesados / totalProductos) * 100;
+                showProgress(`Procesando: ${productoPdf.substring(0, 30)}...`, progreso);
+
+                const match = findProductInInventory(productoPdf, inventario);
+
+                if (match) {
+                    const row = inventario[match.index];
+                    const existencia = row[3]; // Columna EXISTENCIA
+
+                    if (existencia !== null && existencia !== undefined && existencia !== '') {
+                        const existenciaActual = parseFloat(existencia);
+                        const nuevaExistencia = existenciaActual - cantidadVendida;
+                        
+                        inventario[match.index][3] = nuevaExistencia;
+                        
+                        actualizados.push({
+                            pdf: productoPdf,
+                            excel: row[1],
+                            anterior: existenciaActual,
+                            vendido: cantidadVendida,
+                            nueva: nuevaExistencia
+                        });
+                    } else {
+                        sinExistencia.push({
+                            pdf: productoPdf,
+                            excel: row[1],
+                            vendido: cantidadVendida
+                        });
+                    }
+                } else {
+                    noEncontrados.push({
+                        pdf: productoPdf,
+                        vendido: cantidadVendida
+                    });
+                }
+
+                // Pequeña pausa para que se vea la animación
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+
+            // Agregar columnas con no encontrados
+            const headerRow = inventario[1];
+            headerRow.push('', '═══ NO PROCESADOS ═══', 'Descripción (PDF)', 'Cantidad', 'Motivo');
+
+            let filaActual = 2;
+            for (const prod of noEncontrados) {
+                if (filaActual < inventario.length) {
+                    inventario[filaActual].push('', '', prod.pdf, prod.vendido, 'NO EXISTE EN INVENTARIO');
+                }
+                filaActual++;
+            }
+
+            filaActual++;
+            for (const prod of sinExistencia) {
+                if (filaActual < inventario.length) {
+                    inventario[filaActual].push('', '', prod.pdf, prod.vendido, 'SIN EXISTENCIA');
+                }
+                filaActual++;
+            }
+
+            processedData = inventario;
+
+            // Mostrar resultados
+            hideProgress();
+            showResults(actualizados, noEncontrados, sinExistencia);
+        }
+
+        function showProgress(text, percent) {
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('progressText').textContent = text;
+            document.getElementById('progressFill').style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            document.getElementById('progressSection').style.display = 'none';
+        }
+
+        function showResults(actualizados, noEncontrados, sinExistencia) {
+            const totalUnidades = actualizados.reduce((sum, p) => sum + p.vendido, 0);
+            const totalPdf = Object.values(pdfData).reduce((sum, v) => sum + v, 0);
+            const porcentaje = ((totalUnidades / totalPdf) * 100).toFixed(1);
+
+            document.getElementById('successCount').textContent = actualizados.length;
+            document.getElementById('unitsProcessed').textContent = totalUnidades.toLocaleString();
+            document.getElementById('percentProcessed').textContent = porcentaje + '%';
+            document.getElementById('notFoundCount').textContent = noEncontrados.length;
+
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+
+        function downloadExcel() {
+            if (!processedData) return;
+
+            const worksheet = XLSX.utils.aoa_to_sheet(processedData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventario');
+
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
+            const filename = `INVENTARIO_SOSA_ACTUALIZADO_${timestamp}.xlsx`;
+
+            XLSX.writeFile(workbook, filename);
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
