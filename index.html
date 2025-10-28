@@ -273,21 +273,21 @@
         <div class="content">
             <!-- Sección de carga de archivos -->
             <div class="upload-section">
-                <div class="upload-box" id="excelBox" onclick="document.getElementById('excelFile').click()">
+                <div class="upload-box" id="excelBox">
                     <div class="upload-icon">📊</div>
                     <div class="upload-label">Inventario Excel</div>
                     <div class="upload-hint">Click para seleccionar archivo .xlsx</div>
-                    <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="handleExcelUpload(event)">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls">
                     <div class="file-name" id="excelFileName" style="display: none;"></div>
                 </div>
             </div>
 
             <div class="upload-section">
-                <div class="upload-box" id="pdfBox" onclick="document.getElementById('pdfFile').click()">
+                <div class="upload-box" id="pdfBox">
                     <div class="upload-icon">📄</div>
                     <div class="upload-label">PDF de Salidas</div>
                     <div class="upload-hint">Click para seleccionar archivo .pdf</div>
-                    <input type="file" id="pdfFile" accept=".pdf" onchange="handlePdfUpload(event)">
+                    <input type="file" id="pdfFile" accept=".pdf">
                     <div class="file-name" id="pdfFileName" style="display: none;"></div>
                 </div>
             </div>
@@ -353,18 +353,38 @@
             document.getElementById('excelFileName').style.display = 'inline-block';
             document.getElementById('excelBox').classList.add('active');
 
+            showProgress('Cargando archivo Excel...', 5);
+
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                
-                // Leer la primera hoja
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                excelData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
-                
-                checkReadyToProcess();
+
+            reader.onerror = function() {
+                hideProgress();
+                showError('Error al leer el archivo Excel. Por favor, intenta de nuevo.');
             };
-            reader.readAsArrayBuffer(file);
+
+            reader.onload = function(e) {
+                try {
+                    showProgress('Procesando Excel...', 15);
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+
+                    // Leer la primera hoja
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    excelData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+
+                    hideProgress();
+                    checkReadyToProcess();
+                } catch (error) {
+                    hideProgress();
+                    showError('Error al procesar el Excel: ' + error.message);
+                    console.error('Error:', error);
+                }
+            };
+
+            // Usar setTimeout para no bloquear el navegador
+            setTimeout(() => {
+                reader.readAsArrayBuffer(file);
+            }, 100);
         }
 
         async function handlePdfUpload(event) {
@@ -655,6 +675,27 @@
                 errorDiv.style.display = 'none';
             }, 5000);
         }
+
+        // Configurar event listeners cuando la página carga
+        document.addEventListener('DOMContentLoaded', function() {
+            // Click en el box del Excel
+            document.getElementById('excelBox').addEventListener('click', function(e) {
+                if (e.target.tagName !== 'INPUT') {
+                    document.getElementById('excelFile').click();
+                }
+            });
+
+            // Click en el box del PDF
+            document.getElementById('pdfBox').addEventListener('click', function(e) {
+                if (e.target.tagName !== 'INPUT') {
+                    document.getElementById('pdfFile').click();
+                }
+            });
+
+            // Listeners para cambios en los inputs
+            document.getElementById('excelFile').addEventListener('change', handleExcelUpload);
+            document.getElementById('pdfFile').addEventListener('change', handlePdfUpload);
+        });
     </script>
 </body>
 </html>
