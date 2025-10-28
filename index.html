@@ -277,7 +277,7 @@
                     <div class="upload-icon">📊</div>
                     <div class="upload-label">Inventario Excel</div>
                     <div class="upload-hint">Click para seleccionar archivo .xlsx</div>
-                    <input type="file" id="excelFile" accept=".xlsx,.xls">
+                    <input type="file" id="excelFile">
                     <div class="file-name" id="excelFileName" style="display: none;"></div>
                 </div>
             </div>
@@ -348,6 +348,17 @@
         function handleExcelUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // Validar que sea un archivo Excel
+            const validExtensions = ['.xlsx', '.xls', '.xlsm'];
+            const fileName = file.name.toLowerCase();
+            const isExcel = validExtensions.some(ext => fileName.endsWith(ext));
+
+            if (!isExcel) {
+                showError('Por favor selecciona un archivo Excel válido (.xlsx, .xls)');
+                event.target.value = ''; // Limpiar input
+                return;
+            }
 
             document.getElementById('excelFileName').textContent = file.name;
             document.getElementById('excelFileName').style.display = 'inline-block';
