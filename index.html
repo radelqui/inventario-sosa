@@ -387,31 +387,63 @@
         async function extractPdfData(arrayBuffer) {
             const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
             const productosVendidos = {};
+            const totalPages = pdf.numPages;
 
-            for (let i = 1; i <= pdf.numPages; i++) {
+            for (let i = 1; i <= totalPages; i++) {
+                // Actualizar progreso
+                const progreso = Math.floor((i / totalPages) * 30) + 10;
+                showProgress(`Procesando PDF... página ${i}/${totalPages}`, progreso);
+
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
-                const text = textContent.items.map(item => item.str).join(' ');
                 
-                // Extraer productos (formato: CANTIDAD DESCRIPCION PRECIO)
-                const lines = text.split('\n');
-                for (const line of lines) {
-                    const match = line.match(/^(\d{1,4})\s+(.+?)\s+([\d,]+\.?\d*)$/);
-                    if (match) {
-                        const cantidad = parseInt(match[1]);
-                        const descripcion = match[2].trim();
-                        
-                        // Filtrar líneas inválidas
-                        if (!descripcion.includes('Factura') && 
-                            !descripcion.includes('AMCONTADO') && 
-                            !descripcion.includes('DIARIO')) {
-                            productosVendidos[descripcion] = (productosVendidos[descripcion] || 0) + cantidad;
+                // Construir líneas correctamente
+                let currentY = null;
+                let currentLine = '';
+                
+                for (const item of textContent.items) {
+                    // Si cambia la posición Y, es una nueva línea
+                    if (currentY === null || Math.abs(item.transform[5] - currentY) > 2) {
+                        if (currentLine.trim()) {
+                            // Procesar línea anterior
+                            processLine(currentLine.trim(), productosVendidos);
                         }
+                        currentLine = item.str;
+                        currentY = item.transform[5];
+                    } else {
+                        currentLine += ' ' + item.str;
                     }
+                }
+                
+                // Procesar última línea
+                if (currentLine.trim()) {
+                    processLine(currentLine.trim(), productosVendidos);
+                }
+
+                // Dar tiempo al navegador para que no se congele
+                if (i % 10 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
 
             return productosVendidos;
+        }
+
+        function processLine(line, productosVendidos) {
+            // Formato: CANTIDAD DESCRIPCION PRECIO
+            const match = line.match(/^(\d{1,4})\s+(.+?)\s+([\d,]+\.?\d*)$/);
+            if (match) {
+                const cantidad = parseInt(match[1]);
+                const descripcion = match[2].trim();
+                
+                // Filtrar líneas inválidas
+                const invalidas = ['Factura', 'Cantidad', 'AMCONTADO', 'DIARIO', 'Restricción', 'Importe', 'CAJA', 'Turno', 'Pág'];
+                const esInvalida = invalidas.some(palabra => descripcion.includes(palabra));
+                
+                if (!esInvalida && descripcion.length > 2) {
+                    productosVendidos[descripcion] = (productosVendidos[descripcion] || 0) + cantidad;
+                }
+            }
         }
 
         function checkReadyToProcess() {
@@ -469,83 +501,114 @@
         }
 
         async function processInventory() {
-            showProgress('Iniciando actualización...', 0);
+            try {
+                showProgress('Iniciando actualización...', 0);
 
-            const inventario = JSON.parse(JSON.stringify(excelData)); // Copiar
-            const actualizados = [];
-            const noEncontrados = [];
-            const sinExistencia = [];
+                const inventario = JSON.parse(JSON.stringify(excelData)); // Copiar
+                const actualizados = [];
+                const noEncontrados = [];
+                const sinExistencia = [];
 
-            const totalProductos = Object.keys(pdfData).length;
-            let procesados = 0;
+                const totalProductos = Object.keys(pdfData).length;
+                let procesados = 0;
 
-            for (const [productoPdf, cantidadVendida] of Object.entries(pdfData)) {
-                procesados++;
-                const progreso = (procesados / totalProductos) * 100;
-                showProgress(`Procesando: ${productoPdf.substring(0, 30)}...`, progreso);
+                showProgress('Actualizando inventario...', 40);
 
-                const match = findProductInInventory(productoPdf, inventario);
+                // Procesar en lotes para no congelar el navegador
+                const entries = Object.entries(pdfData);
+                const batchSize = 10;
 
-                if (match) {
-                    const row = inventario[match.index];
-                    const existencia = row[3]; // Columna EXISTENCIA
-
-                    if (existencia !== null && existencia !== undefined && existencia !== '') {
-                        const existenciaActual = parseFloat(existencia);
-                        const nuevaExistencia = existenciaActual - cantidadVendida;
+                for (let i = 0; i < entries.length; i += batchSize) {
+                    const batch = entries.slice(i, i + batchSize);
+                    
+                    for (const [productoPdf, cantidadVendida] of batch) {
+                        procesados++;
+                        const progreso = 40 + Math.floor((procesados / totalProductos) * 50);
                         
-                        inventario[match.index][3] = nuevaExistencia;
-                        
-                        actualizados.push({
-                            pdf: productoPdf,
-                            excel: row[1],
-                            anterior: existenciaActual,
-                            vendido: cantidadVendida,
-                            nueva: nuevaExistencia
-                        });
-                    } else {
-                        sinExistencia.push({
-                            pdf: productoPdf,
-                            excel: row[1],
-                            vendido: cantidadVendida
-                        });
+                        if (procesados % 5 === 0) {
+                            showProgress(`Procesando ${procesados}/${totalProductos} productos...`, progreso);
+                        }
+
+                        const match = findProductInInventory(productoPdf, inventario);
+
+                        if (match) {
+                            const row = inventario[match.index];
+                            const existencia = row[3]; // Columna EXISTENCIA
+
+                            if (existencia !== null && existencia !== undefined && existencia !== '') {
+                                try {
+                                    const existenciaActual = parseFloat(existencia);
+                                    const nuevaExistencia = existenciaActual - cantidadVendida;
+                                    
+                                    inventario[match.index][3] = nuevaExistencia;
+                                    
+                                    actualizados.push({
+                                        pdf: productoPdf,
+                                        excel: row[1],
+                                        anterior: existenciaActual,
+                                        vendido: cantidadVendida,
+                                        nueva: nuevaExistencia
+                                    });
+                                } catch (e) {
+                                    console.error('Error procesando:', productoPdf, e);
+                                }
+                            } else {
+                                sinExistencia.push({
+                                    pdf: productoPdf,
+                                    excel: row[1],
+                                    vendido: cantidadVendida
+                                });
+                            }
+                        } else {
+                            noEncontrados.push({
+                                pdf: productoPdf,
+                                vendido: cantidadVendida
+                            });
+                        }
                     }
-                } else {
-                    noEncontrados.push({
-                        pdf: productoPdf,
-                        vendido: cantidadVendida
-                    });
+
+                    // Dar tiempo al navegador entre lotes
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
 
-                // Pequeña pausa para que se vea la animación
-                await new Promise(resolve => setTimeout(resolve, 10));
-            }
+                showProgress('Preparando archivo final...', 95);
 
-            // Agregar columnas con no encontrados
-            const headerRow = inventario[1];
-            headerRow.push('', '═══ NO PROCESADOS ═══', 'Descripción (PDF)', 'Cantidad', 'Motivo');
+                // Agregar columnas con no encontrados
+                const headerRow = inventario[1];
+                headerRow.push('', '═══ NO PROCESADOS ═══', 'Descripción (PDF)', 'Cantidad', 'Motivo');
 
-            let filaActual = 2;
-            for (const prod of noEncontrados) {
-                if (filaActual < inventario.length) {
-                    inventario[filaActual].push('', '', prod.pdf, prod.vendido, 'NO EXISTE EN INVENTARIO');
+                let filaActual = 2;
+                for (const prod of noEncontrados) {
+                    if (filaActual < inventario.length) {
+                        while (inventario[filaActual].length < headerRow.length - 5) {
+                            inventario[filaActual].push('');
+                        }
+                        inventario[filaActual].push('', '', prod.pdf, prod.vendido, 'NO EXISTE EN INVENTARIO');
+                    }
+                    filaActual++;
                 }
+
                 filaActual++;
-            }
-
-            filaActual++;
-            for (const prod of sinExistencia) {
-                if (filaActual < inventario.length) {
-                    inventario[filaActual].push('', '', prod.pdf, prod.vendido, 'SIN EXISTENCIA');
+                for (const prod of sinExistencia) {
+                    if (filaActual < inventario.length) {
+                        while (inventario[filaActual].length < headerRow.length - 5) {
+                            inventario[filaActual].push('');
+                        }
+                        inventario[filaActual].push('', '', prod.pdf, prod.vendido, 'SIN EXISTENCIA');
+                    }
+                    filaActual++;
                 }
-                filaActual++;
+
+                processedData = inventario;
+
+                // Mostrar resultados
+                hideProgress();
+                showResults(actualizados, noEncontrados, sinExistencia);
+            } catch (error) {
+                hideProgress();
+                showError('Error al procesar: ' + error.message);
+                console.error('Error completo:', error);
             }
-
-            processedData = inventario;
-
-            // Mostrar resultados
-            hideProgress();
-            showResults(actualizados, noEncontrados, sinExistencia);
         }
 
         function showProgress(text, percent) {
